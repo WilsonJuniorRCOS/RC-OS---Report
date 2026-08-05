@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Report, ReportStatus, UserRole } from './types';
 import { getStoredUsers } from './data/initialUsers';
-import { fetchAllReports, saveNewReport, updateReportStatusInCloud, fetchAllUsers } from './lib/cloudSync';
+import { fetchAllReports, saveNewReport, updateReportStatusInCloud, deleteReportFromCloud, fetchAllUsers } from './lib/cloudSync';
 import { Navbar } from './components/Navbar';
 import { LoginView } from './components/LoginView';
 import { UserView } from './components/UserView';
@@ -9,6 +9,7 @@ import { AdminView } from './components/AdminView';
 import { UserManagerView } from './components/UserManagerView';
 import { PromptModal } from './components/PromptModal';
 import { ImageModal } from './components/ImageModal';
+import { ReportDetailModal } from './components/ReportDetailModal';
 import { Bell } from 'lucide-react';
 
 export default function App() {
@@ -47,6 +48,7 @@ export default function App() {
   // Modals state
   const [promptReport, setPromptReport] = useState<Report | null>(null);
   const [modalImage, setModalImage] = useState<string | null>(null);
+  const [detailReport, setDetailReport] = useState<Report | null>(null);
 
   // Helper toast
   const showToast = useCallback((msg: string) => {
@@ -212,6 +214,14 @@ export default function App() {
     return true;
   };
 
+  // Delete report
+  const handleDeleteReport = async (id: string): Promise<boolean> => {
+    setReports((prev) => prev.filter((r) => r.id !== id));
+    await deleteReportFromCloud(id);
+    showToast('Report excluído com sucesso!');
+    return true;
+  };
+
   // Expand prompt with Gemini AI API
   const handleExpandWithAI = async (report: Report): Promise<string> => {
     const res = await fetch('/api/gemini/expand-prompt', {
@@ -260,9 +270,11 @@ export default function App() {
               user={user}
               reports={reports}
               onUpdateStatus={handleUpdateStatus}
+              onDeleteReport={handleDeleteReport}
               onRefresh={handleManualRefresh}
               onOpenPromptModal={(r) => setPromptReport(r)}
               onOpenImageModal={(url) => setModalImage(url)}
+              onOpenDetailModal={(r) => setDetailReport(r)}
             />
           )
         ) : (
@@ -270,13 +282,24 @@ export default function App() {
             user={user}
             reports={reports}
             onSubmitReport={handleSubmitReport}
+            onDeleteReport={handleDeleteReport}
             onRefresh={handleManualRefresh}
             onOpenImageModal={(url) => setModalImage(url)}
+            onOpenDetailModal={(r) => setDetailReport(r)}
           />
         )}
       </main>
 
       {/* Modals */}
+      <ReportDetailModal
+        report={detailReport}
+        onClose={() => setDetailReport(null)}
+        onOpenPromptModal={(r) => setPromptReport(r)}
+        onOpenImageModal={(url) => setModalImage(url)}
+        onUpdateStatus={user?.role === 'adm' ? handleUpdateStatus : undefined}
+        onDeleteReport={handleDeleteReport}
+      />
+
       <PromptModal
         report={promptReport}
         onClose={() => setPromptReport(null)}

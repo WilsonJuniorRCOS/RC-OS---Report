@@ -78,14 +78,35 @@ async function syncUsersToCloud(users: User[]): Promise<void> {
   }
 }
 
+export function getDeletedReportIds(): string[] {
+  try {
+    const raw = localStorage.getItem('rc_os_deleted_report_ids');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markReportAsDeleted(reportId: string): void {
+  const ids = getDeletedReportIds();
+  if (!ids.includes(reportId)) {
+    ids.push(reportId);
+    try {
+      localStorage.setItem('rc_os_deleted_report_ids', JSON.stringify(ids));
+    } catch (e) {}
+  }
+}
+
 function deduplicateAndMergeReports(...arrays: any[][]): Report[] {
   const mapByContent = new Map<string, Report>();
+  const deletedIds = getDeletedReportIds();
 
   arrays.forEach((arr) => {
     if (!Array.isArray(arr)) return;
     arr.forEach((item) => {
       if (!item) return;
       const r = normalizeReport(item);
+      if (deletedIds.includes(r.id)) return;
 
       // Content key based on author, title, and description
       const contentKey = `${r.autor_nome.toLowerCase().trim()}_${r.titulo.toLowerCase().trim()}_${r.descricao.toLowerCase().trim()}`;
@@ -229,6 +250,37 @@ export async function updateReportStatusInCloud(reportId: string, status: Report
 
   await syncReportsToCloud(merged);
   return updatedReport;
+}
+
+/**
+ * Exclui um report do LocalStorage, Servidor e Cloud KV global.
+ */
+export async function deleteReportFromCloud(reportId: string): Promise<void> {
+  markReportAsDeleted(reportId);
+
+  let cloudReports: Report[] = [];
+  try {
+    const res = await fetch(CLOUD_SYNC_REPORTS_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) cloudReports = data;
+    }
+  } catch (e) {}
+
+  const localReports = getLocalReports();
+  const merged = deduplicateAndMergeReports(cloudReports, localReports).filter(
+    (r) => r.id !== reportId
+  );
+
+  saveLocalReports(merged);
+
+  try {
+    await fetch(`/api/reports/${reportId}`, {
+      method: 'DELETE',
+    });
+  } catch (e) {}
+
+  await syncReportsToCloud(merged);
 }
 
 /**

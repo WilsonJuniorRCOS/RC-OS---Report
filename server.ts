@@ -273,7 +273,7 @@ readDB();
 type SSEClient = express.Response;
 let sseClients: SSEClient[] = [];
 
-function broadcastUpdate(type: 'REPORT_CREATED' | 'STATUS_UPDATED', report: Report) {
+function broadcastUpdate(type: 'REPORT_CREATED' | 'STATUS_UPDATED' | 'REPORT_DELETED', report: Report) {
   const data = JSON.stringify({ type, report, timestamp: new Date().toISOString() });
   sseClients.forEach((client) => {
     client.write(`data: ${data}\n\n`);
@@ -565,6 +565,20 @@ app.patch('/api/reports/:id/status', (req, res) => {
   broadcastUpdate('STATUS_UPDATED', report);
 
   return res.json({ success: true, report });
+});
+
+app.delete('/api/reports/:id', (req, res) => {
+  const { id } = req.params;
+  const db = readDB();
+  const index = db.reports.findIndex((r) => r.id === id);
+
+  if (index !== -1) {
+    const deleted = db.reports.splice(index, 1)[0];
+    writeDB(db);
+    broadcastUpdate('REPORT_DELETED', deleted);
+  }
+
+  return res.json({ success: true });
 });
 
 // --- Gemini AI Expansion Endpoint ---

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FilterOptions, Report, ReportPrioridade, ReportStatus, ReportTipo, User } from '../types';
+import { formatExternalUrl } from '../lib/utils';
 import {
   ShieldCheck,
   CheckCircle,
@@ -13,24 +14,30 @@ import {
   RefreshCw,
   User as UserIcon,
   AlertTriangle,
+  Trash2,
+  Eye,
 } from 'lucide-react';
 
 interface AdminViewProps {
   user: User;
   reports: Report[];
   onUpdateStatus: (id: string, newStatus: ReportStatus) => Promise<boolean>;
+  onDeleteReport?: (id: string) => Promise<boolean>;
   onRefresh: () => void;
   onOpenPromptModal: (report: Report) => void;
   onOpenImageModal: (url: string) => void;
+  onOpenDetailModal?: (report: Report) => void;
 }
 
 export const AdminView: React.FC<AdminViewProps> = ({
   user,
   reports,
   onUpdateStatus,
+  onDeleteReport,
   onRefresh,
   onOpenPromptModal,
   onOpenImageModal,
+  onOpenDetailModal,
 }) => {
   // Filters
   const [filterStatus, setFilterStatus] = useState<ReportStatus | 'todos'>('todos');
@@ -39,6 +46,16 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleDelete = async (reportId: string, title: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir o report "${title}"?`)) {
+      if (onDeleteReport) {
+        setUpdatingId(reportId);
+        await onDeleteReport(reportId);
+        setUpdatingId(null);
+      }
+    }
+  };
 
   const handleRefreshClick = async () => {
     setIsRefreshing(true);
@@ -272,33 +289,68 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                     {/* Título & Categoria */}
                     <td className="px-4 py-4 align-top max-w-sm">
-                      <div className="text-sm font-semibold text-slate-900 leading-tight">{report.titulo}</div>
-                      <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => onOpenDetailModal && onOpenDetailModal(report)}
+                          className="text-sm font-bold text-slate-900 leading-tight hover:text-indigo-600 transition-colors text-left cursor-pointer"
+                        >
+                          {report.titulo}
+                        </button>
+                      </div>
+
+                      <div className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-2 flex-wrap">
                         <span className="font-medium capitalize text-slate-600">
                           {String(report.tipo || '').toLowerCase().includes('reclam') ? '🚨 Reclamação' : '💡 Sugestão'}
                         </span>
-                        <span>•</span>
-                        <a
-                          href={report.link}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline flex items-center gap-1 font-mono text-[10px]"
-                        >
-                          <ExternalLink className="w-3 h-3" /> Link
-                        </a>
+
+                        {report.link && (
+                          <>
+                            <span>•</span>
+                            <a
+                              href={formatExternalUrl(report.link) || '#'}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-indigo-600 hover:underline flex items-center gap-1 font-mono text-[10px] font-semibold cursor-pointer"
+                            >
+                              <ExternalLink className="w-3 h-3" /> Abrir Link
+                            </a>
+                          </>
+                        )}
+
                         {report.print_url && (
                           <button
                             type="button"
-                            onClick={() => onOpenImageModal(report.print_url!)}
-                            className="text-indigo-600 hover:underline flex items-center gap-1 text-[10px] font-bold"
+                            onClick={() => onOpenDetailModal ? onOpenDetailModal(report) : onOpenImageModal(report.print_url!)}
+                            className="text-emerald-700 hover:underline flex items-center gap-1 text-[10px] font-bold bg-emerald-50 px-1.5 py-0.5 rounded cursor-pointer"
                           >
-                            <ImageIcon className="w-3 h-3" /> Print
+                            <ImageIcon className="w-3 h-3" /> Print Anexado
                           </button>
                         )}
                       </div>
+
                       <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
                         {report.descricao}
                       </p>
+
+                      {/* Print Thumbnail Inline Preview if available */}
+                      {report.print_url && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <img
+                            src={report.print_url}
+                            alt="Print thumbnail"
+                            className="w-12 h-12 object-cover rounded-lg border border-slate-200 cursor-pointer hover:scale-105 transition-transform"
+                            onClick={() => onOpenDetailModal ? onOpenDetailModal(report) : onOpenImageModal(report.print_url!)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => onOpenDetailModal ? onOpenDetailModal(report) : onOpenImageModal(report.print_url!)}
+                            className="text-[11px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                          >
+                            Ver Print Completo & Detalhes
+                          </button>
+                        </div>
+                      )}
                     </td>
 
                     {/* Prioridade */}
@@ -328,12 +380,33 @@ export const AdminView: React.FC<AdminViewProps> = ({
 
                         <button
                           type="button"
+                          onClick={() => onOpenDetailModal && onOpenDetailModal(report)}
+                          title="Ver Report na Íntegra"
+                          className="px-3 py-1 bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold rounded-full transition-all shadow-xs flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5 text-amber-400" /> Ver na Íntegra
+                        </button>
+
+                        <button
+                          type="button"
                           id={`btn-gerar-prompt-${report.id}`}
                           onClick={() => onOpenPromptModal(report)}
                           className="px-3.5 py-1 bg-brand-yellow hover:bg-[#EBB019] text-brand-dark text-xs font-black rounded-full transition-all shadow-xs flex items-center gap-1 cursor-pointer"
                         >
                           <Code2 className="w-3.5 h-3.5 text-slate-900" /> Prompt
                         </button>
+
+                        {onDeleteReport && (
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(report.id, report.titulo)}
+                            disabled={updatingId === report.id}
+                            title="Excluir Report"
+                            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
