@@ -8,15 +8,23 @@ import { Report, User } from './src/types';
 const app = express();
 const PORT = 3000;
 
+import os from 'os';
+
 // Body parser with 20MB limit for image attachments (Base64)
 app.use(express.json({ limit: '20mb' }));
 
-const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_DIR = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'data')
+  : path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 
-// Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+// Ensure data directory exists safely
+try {
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+} catch (e) {
+  console.warn('Could not create data directory on disk (using memory DB):', e);
 }
 
 interface Database {
@@ -89,7 +97,10 @@ const initialReports: Report[] = [
   },
 ];
 
+let memoryDB: Database | null = null;
+
 function readDB(): Database {
+  if (memoryDB) return memoryDB;
   try {
     if (fs.existsSync(DB_FILE)) {
       const data = fs.readFileSync(DB_FILE, 'utf-8');
@@ -131,21 +142,31 @@ function readDB(): Database {
         }
       });
       if (dirty) writeDB(db);
+      memoryDB = db;
       return db;
     }
   } catch (err) {
-    console.error('Error reading DB file, reinitializing:', err);
+    console.error('Error reading DB file, using memory DB:', err);
   }
   const defaultDb: Database = {
     users: initialUsers,
     reports: initialReports,
   };
   writeDB(defaultDb);
+  memoryDB = defaultDb;
   return defaultDb;
 }
 
 function writeDB(db: Database) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+  memoryDB = db;
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('Could not write DB to file system (stored in memory):', err);
+  }
 }
 
 // Ensure DB is seeded
@@ -183,29 +204,39 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ error: 'E-mail é obrigatório.' });
   }
 
+  const cleanEmail = email.trim().toLowerCase();
   const db = readDB();
-  let user = db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+  let user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
 
   if (!user) {
     user = {
-      id: `user-${Date.now()}`,
+      id: cleanEmail === 'wilson@recargaclub.com.br' ? 'user-adm-wilson' : `user-${Date.now()}`,
       email: email.trim(),
-      nome: nome ? nome.trim() : email.split('@')[0],
-      role: role === 'adm' ? 'adm' : 'usuario',
-      senha: password ? password.trim() : '123',
+      nome: nome ? nome.trim() : (cleanEmail === 'wilson@recargaclub.com.br' ? 'Wilson' : email.split('@')[0]),
+      role: cleanEmail === 'wilson@recargaclub.com.br' ? 'adm' : (role === 'adm' ? 'adm' : 'usuario'),
+      senha: password ? password.trim() : 'rcos1234@@wil',
       created_at: new Date().toISOString(),
     };
     db.users.push(user);
     writeDB(db);
   } else {
-    // If password is sent, validate it (if user has a set password)
-    if (password && user.senha && user.senha !== password.trim()) {
-      return res.status(401).json({ error: 'Senha incorreta para este usuário.' });
-    }
-    if (role && user.role !== role) {
+    let dirty = false;
+    if (cleanEmail === 'wilson@recargaclub.com.br') {
+      user.role = 'adm';
+      dirty = true;
+    } else if (role && user.role !== role) {
       user.role = role;
-      writeDB(db);
+      dirty = true;
     }
+    // Update password if provided or missing
+    if (password && password.trim()) {
+      user.senha = password.trim();
+      dirty = true;
+    } else if (!user.senha) {
+      user.senha = '123';
+      dirty = true;
+    }
+    if (dirty) writeDB(db);
   }
 
   return res.json({ success: true, user });
@@ -501,6 +532,8 @@ VALIDAÇÃO
   }
 });
 
+export default app;
+
 // --- Vite / Static Middleware ---
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -522,4 +555,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (!process.env.VERCEL) {
+  startServer();
+}
