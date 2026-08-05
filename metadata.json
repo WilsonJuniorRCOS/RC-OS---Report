@@ -1,0 +1,6 @@
+{
+  "name": "RC OS - Reports & Triagem",
+  "description": "Sistema de registro e triagem de reports de erros e sugestões do RC OS com real-time e geração de prompts técnicos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

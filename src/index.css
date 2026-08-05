@@ -1,0 +1,28 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    background-color: #F8F5EC;
+    color: #1C1C1C;
+  }
+}
+
+.bg-ice {
+  background-color: #F8F5EC;
+}
+
+.bg-brand-yellow {
+  background-color: #FFC226;
+}
+
+.hover\:bg-brand-yellow-hover:hover {
+  background-color: #EBB019;
+}
+
+.text-brand-dark {
+  color: #1C1C1C;
+}
+
+.border-brand-warm {
+  border-color: #E8E2D5;
+}
