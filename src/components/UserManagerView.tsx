@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
+import { getStoredUsers, saveStoredUsers } from '../data/initialUsers';
 import {
   Users,
   UserPlus,
@@ -23,7 +24,7 @@ interface UserManagerViewProps {
 }
 
 export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser }) => {
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<User[]>(() => getStoredUsers());
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'todos' | UserRole>('todos');
@@ -56,23 +57,43 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
   };
 
   const fetchUsers = async () => {
+    const localList = getStoredUsers();
     try {
       setLoading(true);
       const res = await fetch('/api/users');
       if (res.ok) {
         const data = await res.json();
-        setUsers(data.users || []);
+        const serverUsers: User[] = data.users || [];
+        if (serverUsers.length > 0) {
+          // Merge server users with local users
+          const userMap = new Map<string, User>();
+          localList.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+          serverUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
+          const merged = Array.from(userMap.values());
+          saveStoredUsers(merged);
+          setUsers(merged);
+          return;
+        }
       }
     } catch (err) {
-      console.error('Erro ao buscar usuários:', err);
+      console.error('Erro ao buscar usuários do servidor:', err);
     } finally {
       setLoading(false);
     }
+    // Fallback to local stored users
+    setUsers(localList);
   };
 
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  // Sync state to localStorage
+  useEffect(() => {
+    if (users.length > 0) {
+      saveStoredUsers(users);
+    }
+  }, [users]);
 
   const togglePasswordVisibility = (userId: string) => {
     setVisiblePasswords((prev) => ({ ...prev, [userId]: !prev[userId] }));
@@ -103,6 +124,21 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
       return;
     }
 
+    const newUserObj: User = {
+      id: `user-${Date.now()}`,
+      nome: formNome.trim(),
+      email: formEmail.trim(),
+      senha: formSenha ? formSenha.trim() : 'rcos1234@@',
+      role: formRole,
+      created_at: new Date().toISOString(),
+    };
+
+    // Prevent duplicate email check locally first
+    if (users.some((u) => u.email.toLowerCase() === newUserObj.email.toLowerCase())) {
+      setFormError('Já existe um usuário cadastrado com este e-mail.');
+      return;
+    }
+
     try {
       setFormSubmitting(true);
       setFormError(null);
@@ -125,36 +161,34 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
         console.warn('Erro ao ler resposta JSON:', e);
       }
 
-      if (!res.ok) {
-        setFormError(data.error || `Erro do servidor (${res.status}).`);
+      if (res.ok && data.user) {
+        const created: User = data.user;
+        setUsers((prev) => {
+          const next = [created, ...prev.filter((u) => u.email.toLowerCase() !== created.email.toLowerCase())];
+          saveStoredUsers(next);
+          return next;
+        });
+        showFeedback(`Usuário "${created.nome}" criado com sucesso!`);
+        setIsCreateModalOpen(false);
+        return;
+      } else if (res.status === 400 && data.error) {
+        setFormError(data.error);
         return;
       }
-
-      showFeedback(`Usuário "${data.user?.nome || formNome}" criado com sucesso!`);
-      setIsCreateModalOpen(false);
-      fetchUsers();
     } catch (err: any) {
       console.warn('Erro na chamada API ao criar usuário, aplicando fallback local:', err);
-      const newUser: User = {
-        id: `user-${Date.now()}`,
-        nome: formNome.trim(),
-        email: formEmail.trim(),
-        senha: formSenha ? formSenha.trim() : 'rcos1234@@',
-        role: formRole,
-        created_at: new Date().toISOString(),
-      };
-      setUsers((prev) => {
-        if (prev.some((u) => u.email.toLowerCase() === newUser.email.toLowerCase())) {
-          setFormError('Já existe um usuário cadastrado com este e-mail.');
-          return prev;
-        }
-        showFeedback(`Usuário "${newUser.nome}" criado com sucesso!`);
-        setIsCreateModalOpen(false);
-        return [newUser, ...prev];
-      });
     } finally {
       setFormSubmitting(false);
     }
+
+    // Always apply fallback if API failed or returned non-200/non-400 (e.g. 404 on Vercel)
+    setUsers((prev) => {
+      const next = [newUserObj, ...prev.filter((u) => u.email.toLowerCase() !== newUserObj.email.toLowerCase())];
+      saveStoredUsers(next);
+      return next;
+    });
+    showFeedback(`Usuário "${newUserObj.nome}" criado com sucesso!`);
+    setIsCreateModalOpen(false);
   };
 
   const handleEditUser = async (e: React.FormEvent) => {
@@ -164,6 +198,14 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
       setFormError('Nome e E-mail são obrigatórios.');
       return;
     }
+
+    const updatedUserObj: User = {
+      ...editingUser,
+      nome: formNome.trim(),
+      email: formEmail.trim(),
+      senha: formSenha ? formSenha.trim() : editingUser.senha,
+      role: formRole,
+    };
 
     try {
       setFormSubmitting(true);
@@ -187,34 +229,34 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
         console.warn('Erro ao ler resposta JSON:', e);
       }
 
-      if (!res.ok) {
-        setFormError(data.error || `Erro do servidor (${res.status}).`);
+      if (res.ok && data.user) {
+        const updated: User = data.user;
+        setUsers((prev) => {
+          const next = prev.map((u) => (u.id === updated.id ? updated : u));
+          saveStoredUsers(next);
+          return next;
+        });
+        showFeedback(`Usuário "${updated.nome}" atualizado com sucesso!`);
+        setEditingUser(null);
+        return;
+      } else if (res.status === 400 && data.error) {
+        setFormError(data.error);
         return;
       }
-
-      showFeedback(`Usuário "${data.user?.nome || formNome}" atualizado com sucesso!`);
-      setEditingUser(null);
-      fetchUsers();
     } catch (err: any) {
       console.warn('Erro na chamada API ao atualizar usuário, aplicando fallback local:', err);
-      setUsers((prev) =>
-        prev.map((u) =>
-          u.id === editingUser.id
-            ? {
-                ...u,
-                nome: formNome.trim(),
-                email: formEmail.trim(),
-                senha: formSenha ? formSenha.trim() : u.senha,
-                role: formRole,
-              }
-            : u
-        )
-      );
-      showFeedback(`Usuário "${formNome}" atualizado com sucesso!`);
-      setEditingUser(null);
     } finally {
       setFormSubmitting(false);
     }
+
+    // Always apply fallback
+    setUsers((prev) => {
+      const next = prev.map((u) => (u.id === updatedUserObj.id ? updatedUserObj : u));
+      saveStoredUsers(next);
+      return next;
+    });
+    showFeedback(`Usuário "${updatedUserObj.nome}" atualizado com sucesso!`);
+    setEditingUser(null);
   };
 
   const handleDeleteUser = async () => {
@@ -233,22 +275,23 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
         console.warn('Erro ao ler resposta JSON:', e);
       }
 
-      if (!res.ok) {
-        alert(data.error || `Erro do servidor (${res.status}).`);
+      if (res.status === 400 && data.error) {
+        alert(data.error);
         return;
       }
-
-      showFeedback(`Usuário "${deletingUser.nome}" removido.`);
-      setDeletingUser(null);
-      fetchUsers();
     } catch (err) {
       console.warn('Erro na chamada API ao excluir usuário, aplicando fallback local:', err);
-      setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id));
-      showFeedback(`Usuário "${deletingUser.nome}" removido.`);
-      setDeletingUser(null);
     } finally {
       setDeleteSubmitting(false);
     }
+
+    setUsers((prev) => {
+      const next = prev.filter((u) => u.id !== deletingUser.id);
+      saveStoredUsers(next);
+      return next;
+    });
+    showFeedback(`Usuário "${deletingUser.nome}" removido.`);
+    setDeletingUser(null);
   };
 
   // Filter logic

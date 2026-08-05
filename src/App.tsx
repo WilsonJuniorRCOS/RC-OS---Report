@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Report, ReportStatus, UserRole } from './types';
+import { getStoredUsers, saveStoredUsers } from './data/initialUsers';
 import { Navbar } from './components/Navbar';
 import { LoginView } from './components/LoginView';
 import { UserView } from './components/UserView';
@@ -20,9 +21,27 @@ export default function App() {
   });
 
   const [activeAdmTab, setActiveAdmTab] = useState<'reports' | 'users'>('reports');
-  const [reports, setReports] = useState<Report[]>([]);
+  const [reports, setReports] = useState<Report[]>(() => {
+    try {
+      const raw = localStorage.getItem('rc_os_reports');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [loadingReports, setLoadingReports] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Sync reports to localStorage
+  useEffect(() => {
+    if (reports.length > 0) {
+      try {
+        localStorage.setItem('rc_os_reports', JSON.stringify(reports));
+      } catch (e) {
+        console.warn('Erro ao salvar reports no localStorage:', e);
+      }
+    }
+  }, [reports]);
 
   // Modals state
   const [promptReport, setPromptReport] = useState<Report | null>(null);
@@ -45,7 +64,17 @@ export default function App() {
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        setReports(data.reports || []);
+        const serverReports: Report[] = data.reports || [];
+        if (serverReports.length > 0) {
+          setReports((prev) => {
+            const map = new Map<string, Report>();
+            prev.forEach((r) => map.set(r.id, r));
+            serverReports.forEach((r) => map.set(r.id, r));
+            return Array.from(map.values()).sort(
+              (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            );
+          });
+        }
       }
     } catch (err) {
       console.error('Error fetching reports:', err);
@@ -128,13 +157,16 @@ export default function App() {
 
     // Client-side fallback if server API is unreachable or on static host (e.g. Vercel)
     const cleanEmail = email.trim();
+    const storedUsers = getStoredUsers();
+    const existingUser = storedUsers.find((u) => u.email.toLowerCase() === cleanEmail.toLowerCase());
+
     const isWilson = cleanEmail.toLowerCase() === 'wilson@recargaclub.com.br';
-    const fallbackUser: User = {
+    const fallbackUser: User = existingUser || {
       id: isWilson ? 'user-adm-wilson' : `user-${Date.now()}`,
       email: cleanEmail,
       nome: nome ? nome.trim() : (isWilson ? 'Wilson' : cleanEmail.split('@')[0]),
       role: isWilson ? 'adm' : role,
-      senha: password ? password.trim() : 'rcos1234@@wil',
+      senha: password ? password.trim() : 'rcos1234@@',
       created_at: new Date().toISOString(),
     };
     setUser(fallbackUser);
