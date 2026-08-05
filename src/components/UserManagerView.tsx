@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { getStoredUsers, saveStoredUsers } from '../data/initialUsers';
+import { fetchAllUsers, saveNewUser, deleteUserFromCloud } from '../lib/cloudSync';
 import {
   Users,
   UserPlus,
@@ -57,31 +58,15 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
   };
 
   const fetchUsers = async () => {
-    const localList = getStoredUsers();
     try {
       setLoading(true);
-      const res = await fetch('/api/users');
-      if (res.ok) {
-        const data = await res.json();
-        const serverUsers: User[] = data.users || [];
-        if (serverUsers.length > 0) {
-          // Merge server users with local users
-          const userMap = new Map<string, User>();
-          localList.forEach((u) => userMap.set(u.email.toLowerCase(), u));
-          serverUsers.forEach((u) => userMap.set(u.email.toLowerCase(), u));
-          const merged = Array.from(userMap.values());
-          saveStoredUsers(merged);
-          setUsers(merged);
-          return;
-        }
-      }
+      const list = await fetchAllUsers();
+      setUsers(list);
     } catch (err) {
-      console.error('Erro ao buscar usuários do servidor:', err);
+      console.error('Erro ao buscar usuários:', err);
     } finally {
       setLoading(false);
     }
-    // Fallback to local stored users
-    setUsers(localList);
   };
 
   useEffect(() => {
@@ -133,7 +118,6 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
       created_at: new Date().toISOString(),
     };
 
-    // Prevent duplicate email check locally first
     if (users.some((u) => u.email.toLowerCase() === newUserObj.email.toLowerCase())) {
       setFormError('Já existe um usuário cadastrado com este e-mail.');
       return;
@@ -142,53 +126,16 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
     try {
       setFormSubmitting(true);
       setFormError(null);
+      await saveNewUser(newUserObj);
 
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: formNome,
-          email: formEmail,
-          senha: formSenha || 'rcos1234@@',
-          role: formRole,
-        }),
-      });
-
-      let data: any = {};
-      try {
-        data = await res.json();
-      } catch (e) {
-        console.warn('Erro ao ler resposta JSON:', e);
-      }
-
-      if (res.ok && data.user) {
-        const created: User = data.user;
-        setUsers((prev) => {
-          const next = [created, ...prev.filter((u) => u.email.toLowerCase() !== created.email.toLowerCase())];
-          saveStoredUsers(next);
-          return next;
-        });
-        showFeedback(`Usuário "${created.nome}" criado com sucesso!`);
-        setIsCreateModalOpen(false);
-        return;
-      } else if (res.status === 400 && data.error) {
-        setFormError(data.error);
-        return;
-      }
+      setUsers((prev) => [newUserObj, ...prev.filter((u) => u.email.toLowerCase() !== newUserObj.email.toLowerCase())]);
+      showFeedback(`Usuário "${newUserObj.nome}" criado com sucesso!`);
+      setIsCreateModalOpen(false);
     } catch (err: any) {
-      console.warn('Erro na chamada API ao criar usuário, aplicando fallback local:', err);
+      setFormError(err?.message || 'Erro ao cadastrar usuário.');
     } finally {
       setFormSubmitting(false);
     }
-
-    // Always apply fallback if API failed or returned non-200/non-400 (e.g. 404 on Vercel)
-    setUsers((prev) => {
-      const next = [newUserObj, ...prev.filter((u) => u.email.toLowerCase() !== newUserObj.email.toLowerCase())];
-      saveStoredUsers(next);
-      return next;
-    });
-    showFeedback(`Usuário "${newUserObj.nome}" criado com sucesso!`);
-    setIsCreateModalOpen(false);
   };
 
   const handleEditUser = async (e: React.FormEvent) => {
@@ -210,53 +157,16 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
     try {
       setFormSubmitting(true);
       setFormError(null);
+      await saveNewUser(updatedUserObj);
 
-      const res = await fetch(`/api/users/${editingUser.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          nome: formNome,
-          email: formEmail,
-          senha: formSenha,
-          role: formRole,
-        }),
-      });
-
-      let data: any = {};
-      try {
-        data = await res.json();
-      } catch (e) {
-        console.warn('Erro ao ler resposta JSON:', e);
-      }
-
-      if (res.ok && data.user) {
-        const updated: User = data.user;
-        setUsers((prev) => {
-          const next = prev.map((u) => (u.id === updated.id ? updated : u));
-          saveStoredUsers(next);
-          return next;
-        });
-        showFeedback(`Usuário "${updated.nome}" atualizado com sucesso!`);
-        setEditingUser(null);
-        return;
-      } else if (res.status === 400 && data.error) {
-        setFormError(data.error);
-        return;
-      }
+      setUsers((prev) => prev.map((u) => (u.id === updatedUserObj.id ? updatedUserObj : u)));
+      showFeedback(`Usuário "${updatedUserObj.nome}" atualizado com sucesso!`);
+      setEditingUser(null);
     } catch (err: any) {
-      console.warn('Erro na chamada API ao atualizar usuário, aplicando fallback local:', err);
+      setFormError(err?.message || 'Erro ao atualizar usuário.');
     } finally {
       setFormSubmitting(false);
     }
-
-    // Always apply fallback
-    setUsers((prev) => {
-      const next = prev.map((u) => (u.id === updatedUserObj.id ? updatedUserObj : u));
-      saveStoredUsers(next);
-      return next;
-    });
-    showFeedback(`Usuário "${updatedUserObj.nome}" atualizado com sucesso!`);
-    setEditingUser(null);
   };
 
   const handleDeleteUser = async () => {
@@ -264,34 +174,16 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
 
     try {
       setDeleteSubmitting(true);
-      const res = await fetch(`/api/users/${deletingUser.id}`, {
-        method: 'DELETE',
-      });
+      await deleteUserFromCloud(deletingUser.id);
 
-      let data: any = {};
-      try {
-        data = await res.json();
-      } catch (e) {
-        console.warn('Erro ao ler resposta JSON:', e);
-      }
-
-      if (res.status === 400 && data.error) {
-        alert(data.error);
-        return;
-      }
-    } catch (err) {
-      console.warn('Erro na chamada API ao excluir usuário, aplicando fallback local:', err);
+      setUsers((prev) => prev.filter((u) => u.id !== deletingUser.id));
+      showFeedback(`Usuário "${deletingUser.nome}" removido.`);
+      setDeletingUser(null);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao excluir usuário.');
     } finally {
       setDeleteSubmitting(false);
     }
-
-    setUsers((prev) => {
-      const next = prev.filter((u) => u.id !== deletingUser.id);
-      saveStoredUsers(next);
-      return next;
-    });
-    showFeedback(`Usuário "${deletingUser.nome}" removido.`);
-    setDeletingUser(null);
   };
 
   // Filter logic

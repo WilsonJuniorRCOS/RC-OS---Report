@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Report, ReportStatus, UserRole } from './types';
-import { getStoredUsers, saveStoredUsers } from './data/initialUsers';
+import { getStoredUsers } from './data/initialUsers';
+import { fetchAllReports, saveNewReport, updateReportStatusInCloud, fetchAllUsers } from './lib/cloudSync';
 import { Navbar } from './components/Navbar';
 import { LoginView } from './components/LoginView';
 import { UserView } from './components/UserView';
@@ -55,33 +56,27 @@ export default function App() {
     }, 4000);
   }, []);
 
-  // Fetch reports from API
+  // Fetch reports from Cloud Sync + API
   const fetchReports = useCallback(async () => {
     if (!user) return;
     try {
       setLoadingReports(true);
-      const url = `/api/reports?autor_id=${encodeURIComponent(user.id)}&role=${encodeURIComponent(user.role)}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        const serverReports: Report[] = data.reports || [];
-        if (serverReports.length > 0) {
-          setReports((prev) => {
-            const map = new Map<string, Report>();
-            prev.forEach((r) => map.set(r.id, r));
-            serverReports.forEach((r) => map.set(r.id, r));
-            return Array.from(map.values()).sort(
-              (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-            );
-          });
+      const data = await fetchAllReports(user.id, user.role);
+      setReports((prev) => {
+        if (user.role === 'adm' && prev.length > 0 && data.length > prev.length) {
+          const newest = data[0];
+          if (!prev.some((p) => p.id === newest.id)) {
+            showToast(`Novo report recebido de ${newest.autor_nome}: "${newest.titulo}"`);
+          }
         }
-      }
+        return data;
+      });
     } catch (err) {
       console.error('Error fetching reports:', err);
     } finally {
       setLoadingReports(false);
     }
-  }, [user]);
+  }, [user, showToast]);
 
   // Initial fetch and polling fallback
   useEffect(() => {
@@ -190,65 +185,26 @@ export default function App() {
   const handleSubmitReport = async (
     newReportData: Omit<Report, 'id' | 'created_at' | 'updated_at' | 'status'>
   ): Promise<boolean> => {
-    try {
-      const res = await fetch('/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newReportData),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.report) {
-          setReports((prev) => {
-            if (prev.some((r) => r.id === data.report.id)) return prev;
-            return [data.report, ...prev];
-          });
-        }
-        return true;
-      } else {
-        const errorData = await res.json().catch(() => ({}));
-        console.warn('Backend returned error when saving report:', errorData);
-      }
-    } catch (err: any) {
-      console.error('Submit report API error, applying client fallback:', err);
-    }
-
-    // Client fallback if API endpoint is static, offline, or error
-    const fallbackReport: Report = {
+    const newReport: Report = {
       id: `rep-${Date.now()}`,
       ...newReportData,
       status: 'novo',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    setReports((prev) => [fallbackReport, ...prev]);
+
+    setReports((prev) => [newReport, ...prev]);
+    await saveNewReport(newReport);
     return true;
   };
 
   // Update report status (ADM)
   const handleUpdateStatus = async (id: string, newStatus: ReportStatus): Promise<boolean> => {
-    try {
-      const res = await fetch(`/api/reports/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data.report) {
-          setReports((prev) =>
-            prev.map((r) => (r.id === id ? data.report : r))
-          );
-        }
-        return true;
-      }
-      return false;
-    } catch (err) {
-      console.error('Update status error:', err);
-      return false;
-    }
+    setReports((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, status: newStatus, updated_at: new Date().toISOString() } : r))
+    );
+    await updateReportStatusInCloud(id, newStatus);
+    return true;
   };
 
   // Expand prompt with Gemini AI API
