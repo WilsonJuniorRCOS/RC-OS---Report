@@ -347,87 +347,108 @@ app.post('/api/auth/register', (req, res) => {
 
 // --- User Management Endpoints (Área do Gestor) ---
 app.get('/api/users', (req, res) => {
-  const db = readDB();
-  return res.json({ users: db.users });
+  try {
+    const db = readDB();
+    return res.json({ users: db.users || [] });
+  } catch (err: any) {
+    console.error('Error fetching users:', err);
+    return res.status(500).json({ error: 'Erro ao buscar usuários.' });
+  }
 });
 
 app.post('/api/users', (req, res) => {
-  const { nome, email, senha, role } = req.body;
+  try {
+    const { nome, email, senha, role } = req.body || {};
 
-  if (!nome || !email) {
-    return res.status(400).json({ error: 'Nome e E-mail são obrigatórios.' });
+    if (!nome || !email) {
+      return res.status(400).json({ error: 'Nome e E-mail são obrigatórios.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const db = readDB();
+    const existing = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+    if (existing) {
+      return res.status(400).json({ error: 'Já existe um usuário cadastrado com este e-mail.' });
+    }
+
+    const newUser: User = {
+      id: `user-${Date.now()}`,
+      nome: nome.trim(),
+      email: email.trim(),
+      senha: senha ? senha.trim() : 'rcos1234@@',
+      role: role === 'adm' ? 'adm' : 'usuario',
+      created_at: new Date().toISOString(),
+    };
+
+    db.users.push(newUser);
+    writeDB(db);
+
+    return res.status(201).json({ success: true, user: newUser });
+  } catch (err: any) {
+    console.error('Error creating user:', err);
+    return res.status(500).json({ error: 'Erro ao cadastrar usuário: ' + (err?.message || 'Erro interno do servidor') });
   }
-
-  const db = readDB();
-  const existing = db.users.find((u) => u.email.toLowerCase() === email.trim().toLowerCase());
-  if (existing) {
-    return res.status(400).json({ error: 'Já existe um usuário com este e-mail.' });
-  }
-
-  const newUser: User = {
-    id: `user-${Date.now()}`,
-    nome: nome.trim(),
-    email: email.trim(),
-    senha: senha ? senha.trim() : '123',
-    role: role === 'adm' ? 'adm' : 'usuario',
-    created_at: new Date().toISOString(),
-  };
-
-  db.users.push(newUser);
-  writeDB(db);
-
-  return res.status(201).json({ success: true, user: newUser });
 });
 
 app.put('/api/users/:id', (req, res) => {
-  const { id } = req.params;
-  const { nome, email, senha, role } = req.body;
+  try {
+    const { id } = req.params;
+    const { nome, email, senha, role } = req.body || {};
 
-  const db = readDB();
-  const user = db.users.find((u) => u.id === id);
+    const db = readDB();
+    const user = db.users.find((u) => u.id === id);
 
-  if (!user) {
-    return res.status(404).json({ error: 'Usuário não encontrado.' });
-  }
-
-  if (email && email.trim().toLowerCase() !== user.email.toLowerCase()) {
-    const emailOccupied = db.users.some(
-      (u) => u.id !== id && u.email.toLowerCase() === email.trim().toLowerCase()
-    );
-    if (emailOccupied) {
-      return res.status(400).json({ error: 'E-mail já está em uso por outro usuário.' });
+    if (!user) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
     }
-    user.email = email.trim();
+
+    if (email && email.trim().toLowerCase() !== user.email.toLowerCase()) {
+      const emailOccupied = db.users.some(
+        (u) => u.id !== id && u.email.toLowerCase() === email.trim().toLowerCase()
+      );
+      if (emailOccupied) {
+        return res.status(400).json({ error: 'E-mail já está em uso por outro usuário.' });
+      }
+      user.email = email.trim();
+    }
+
+    if (nome) user.nome = nome.trim();
+    if (role && (role === 'adm' || role === 'usuario')) user.role = role;
+    if (senha) user.senha = senha.trim();
+
+    writeDB(db);
+    return res.json({ success: true, user });
+  } catch (err: any) {
+    console.error('Error updating user:', err);
+    return res.status(500).json({ error: 'Erro ao atualizar usuário: ' + (err?.message || 'Erro interno do servidor') });
   }
-
-  if (nome) user.nome = nome.trim();
-  if (role && (role === 'adm' || role === 'usuario')) user.role = role;
-  if (senha) user.senha = senha.trim();
-
-  writeDB(db);
-  return res.json({ success: true, user });
 });
 
 app.delete('/api/users/:id', (req, res) => {
-  const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-  const db = readDB();
-  const userIndex = db.users.findIndex((u) => u.id === id);
+    const db = readDB();
+    const userIndex = db.users.findIndex((u) => u.id === id);
 
-  if (userIndex === -1) {
-    return res.status(404).json({ error: 'Usuário não encontrado.' });
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Usuário não encontrado.' });
+    }
+
+    // Check if trying to delete the only ADM
+    const admCount = db.users.filter((u) => u.role === 'adm').length;
+    if (db.users[userIndex].role === 'adm' && admCount <= 1) {
+      return res.status(400).json({ error: 'Não é possível excluir o único administrador do sistema.' });
+    }
+
+    db.users.splice(userIndex, 1);
+    writeDB(db);
+
+    return res.json({ success: true, message: 'Usuário excluído com sucesso.' });
+  } catch (err: any) {
+    console.error('Error deleting user:', err);
+    return res.status(500).json({ error: 'Erro ao excluir usuário: ' + (err?.message || 'Erro interno do servidor') });
   }
-
-  // Check if trying to delete the only ADM
-  const admCount = db.users.filter((u) => u.role === 'adm').length;
-  if (db.users[userIndex].role === 'adm' && admCount <= 1) {
-    return res.status(400).json({ error: 'Não é possível excluir o único administrador do sistema.' });
-  }
-
-  db.users.splice(userIndex, 1);
-  writeDB(db);
-
-  return res.json({ success: true, message: 'Usuário excluído com sucesso.' });
 });
 
 // --- Reports Endpoints ---
@@ -616,7 +637,7 @@ async function startServer() {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+        hmr: false,
       },
       appType: 'spa',
     });
