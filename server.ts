@@ -231,6 +231,12 @@ function readDB(): Database {
           r.prioridade = r.prioridade === 'alta' ? 'urgente' : 'normal';
           dirty = true;
         }
+        const rawTipo = String(r.tipo || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const normTipo = rawTipo.includes('reclam') ? 'reclamacao' : 'sugestao';
+        if (r.tipo !== normTipo) {
+          r.tipo = normTipo as any;
+          dirty = true;
+        }
       });
       if (dirty) writeDB(db);
       memoryDB = db;

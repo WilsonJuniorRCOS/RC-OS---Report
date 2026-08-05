@@ -275,7 +275,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                       <div className="text-sm font-semibold text-slate-900 leading-tight">{report.titulo}</div>
                       <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
                         <span className="font-medium capitalize text-slate-600">
-                          {report.tipo === 'reclamacao' ? '🚨 Reclamação' : '💡 Sugestão'}
+                          {String(report.tipo || '').toLowerCase().includes('reclam') ? '🚨 Reclamação' : '💡 Sugestão'}
                         </span>
                         <span>•</span>
                         <a

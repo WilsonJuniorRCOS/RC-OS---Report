@@ -417,12 +417,12 @@ export const UserView: React.FC<UserViewProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       <span
                         className={`px-2.5 py-0.5 text-[10px] font-bold rounded ${
-                          report.tipo === 'reclamacao'
+                          String(report.tipo || '').toLowerCase().includes('reclam')
                             ? 'bg-rose-50 text-rose-700 border border-rose-200'
                             : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                         }`}
                       >
-                        {report.tipo === 'reclamacao' ? 'Reclamação' : 'Sugestão'}
+                        {String(report.tipo || '').toLowerCase().includes('reclam') ? 'Reclamação' : 'Sugestão'}
                       </span>
                       {getPriorityBadge(report.prioridade)}
                       <span className="text-[11px] text-slate-400">
