@@ -29,6 +29,19 @@ export const UserView: React.FC<UserViewProps> = ({
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshClick = async () => {
+    if (!onRefresh) return;
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   // Field validation helper
   const isTituloValid = titulo.trim().length > 0;
@@ -187,10 +200,12 @@ export const UserView: React.FC<UserViewProps> = ({
         <div className="flex items-center gap-2">
           {onRefresh && (
             <button
-              onClick={onRefresh}
-              className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-colors"
+              onClick={handleRefreshClick}
+              disabled={isRefreshing}
+              className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-70"
             >
-              <RefreshCw className="w-3.5 h-3.5" /> Atualizar Lista
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-600' : ''}`} />
+              {isRefreshing ? 'Atualizando...' : 'Atualizar Lista'}
             </button>
           )}
         </div>

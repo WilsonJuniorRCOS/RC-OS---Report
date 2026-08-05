@@ -130,6 +130,32 @@ const initialUsers: User[] = [
 
 const initialReports: Report[] = [
   {
+    id: 'rep-johnatha-1',
+    titulo: 'Teste De Report',
+    tipo: 'reclamacao',
+    link: 'blbalbalbalabla.com',
+    prioridade: 'urgente',
+    descricao: 'ta erro aqui olha',
+    autor_id: 'user-johnatha',
+    autor_nome: 'Johnatha Francis',
+    status: 'novo',
+    created_at: '2026-08-05T12:37:12.000Z',
+    updated_at: '2026-08-05T12:37:12.000Z',
+  },
+  {
+    id: 'rep-jessica-1',
+    titulo: 'Teste',
+    tipo: 'reclamacao',
+    link: 'urgentissimo',
+    prioridade: 'urgente',
+    descricao: 'ongoin',
+    autor_id: 'user-jessica',
+    autor_nome: 'Jessica',
+    status: 'novo',
+    created_at: '2026-08-05T12:47:57.000Z',
+    updated_at: '2026-08-05T12:47:57.000Z',
+  },
+  {
     id: 'rep-1',
     titulo: 'Erro ao calcular comissão no checkout do cliente',
     tipo: 'reclamacao',
@@ -141,19 +167,6 @@ const initialReports: Report[] = [
     status: 'novo',
     created_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
     updated_at: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-  },
-  {
-    id: 'rep-2',
-    titulo: 'Adicionar filtro por data de validade na listagem de cadastros',
-    tipo: 'sugestao',
-    link: 'https://rc-os.internal/cadastros',
-    prioridade: 'normal',
-    descricao: 'Seria muito útil para a equipe de atendimento conseguir filtrar os parceiros ativos que expiram nos próximos 30 dias.',
-    autor_id: 'user-consultor-2',
-    autor_nome: 'Mariana Costa',
-    status: 'em_andamento',
-    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
-    updated_at: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
   },
 ];
 
@@ -583,7 +596,7 @@ DADOS DO REPORT:
 - Link informado: ${report.link}
 - Descrição detalhada: ${report.descricao}
 
-MANTENHA RIGOROSAMENTE A ESTRUTURA DO TEMPLATE ABAIXO.
+MANTENHA RIGOROSAMENTE A ESTRUTURA DO TEMPLATE ABAIXO (Incluindo SOMENTE as 3 seções: CONTEXTO, PROBLEMA e COMPORTAMENTO ESPERADO).
 Substitua os [PREENCHER — ...] com análises técnicas inteligentes e precisas baseadas na descrição do erro.
 
 TEMPLATE EXATO A RETORNAR:
@@ -598,21 +611,11 @@ Tipo: ${report.tipo}  |  Prioridade: ${report.prioridade}
 
 PROBLEMA
 ${report.descricao}
-[Adicione detalhamento técnico provável da causa raiz, ex: erro de estado, exceção em API de integração, arredondamento numérico, token expirado]
+[Adicione detalhamento técnico provável da causa raiz, se necessário]
 
 COMPORTAMENTO ESPERADO
 [Solução principal esperada em detalhes técnicos]
-[Solução secundária ou fallback defensivo se houver]
-
-O QUE PRECISA SER INVESTIGADO / CORRIGIDO
-1. [Primeiro ponto técnico a investigar/corrigir]
-2. [Segundo ponto técnico a investigar/corrigir]
-3. [Terceiro ponto técnico a investigar/corrigir]
-
-VALIDAÇÃO
-- [Passo de teste manual 1]
-- [Passo de teste manual 2]
-- [Confirmar que cálculos/indexações dependentes refletem a correção]`;
+[Solução secundária ou fallback defensivo se houver]`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.6-flash',

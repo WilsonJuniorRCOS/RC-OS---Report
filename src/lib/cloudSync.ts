@@ -1,8 +1,8 @@
 import { Report, User } from '../types';
-import { DEFAULT_USERS, getStoredUsers, saveStoredUsers } from '../data/initialUsers';
+import { DEFAULT_USERS, getStoredUsers, saveStoredUsers, getDeletedUserIds, markUserAsDeleted } from '../data/initialUsers';
 
-const CLOUD_SYNC_REPORTS_URL = 'https://kvdb.io/rc_os_reports_v2026/reports';
-const CLOUD_SYNC_USERS_URL = 'https://kvdb.io/rc_os_reports_v2026/users';
+const CLOUD_SYNC_REPORTS_URL = 'https://jsonblob.com/api/jsonBlob/019fd29e-cc5a-7b43-ad5e-2babe8c8ceda';
+const CLOUD_SYNC_USERS_URL = 'https://jsonblob.com/api/jsonBlob/019fd29e-f7f3-70f1-a891-2d2b69169cc5';
 
 function getLocalReports(): Report[] {
   try {
@@ -21,20 +21,28 @@ function saveLocalReports(reports: Report[]): void {
   }
 }
 
-function syncReportsToCloud(reports: Report[]): void {
-  fetch(CLOUD_SYNC_REPORTS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(reports),
-  }).catch(() => {});
+async function syncReportsToCloud(reports: Report[]): Promise<void> {
+  try {
+    await fetch(CLOUD_SYNC_REPORTS_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reports),
+    });
+  } catch (e) {
+    console.warn('Erro na sincronização de reports com cloud:', e);
+  }
 }
 
-function syncUsersToCloud(users: User[]): void {
-  fetch(CLOUD_SYNC_USERS_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(users),
-  }).catch(() => {});
+async function syncUsersToCloud(users: User[]): Promise<void> {
+  try {
+    await fetch(CLOUD_SYNC_USERS_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(users),
+    });
+  } catch (e) {
+    console.warn('Erro na sincronização de usuários com cloud:', e);
+  }
 }
 
 /**
@@ -55,11 +63,9 @@ export async function fetchAllReports(userId?: string, role?: string): Promise<R
         serverReports = data.reports;
       }
     }
-  } catch (e) {
-    // Ignora silenciosamente
-  }
+  } catch (e) {}
 
-  // 2. Tenta Cloud KV global compartilhado
+  // 2. Tenta Cloud JSONBlob compartilhado
   try {
     const res = await fetch(CLOUD_SYNC_REPORTS_URL);
     if (res.ok) {
@@ -68,11 +74,9 @@ export async function fetchAllReports(userId?: string, role?: string): Promise<R
         cloudReports = data;
       }
     }
-  } catch (e) {
-    // Ignora silenciosamente
-  }
+  } catch (e) {}
 
-  // 3. Unifica e combina por ID mantendo a versão mais recente
+  // 3. Unifica e combina por ID
   const map = new Map<string, Report>();
 
   localReports.forEach((r) => map.set(r.id, r));
@@ -97,10 +101,10 @@ export async function fetchAllReports(userId?: string, role?: string): Promise<R
   saveLocalReports(allMerged);
   syncReportsToCloud(allMerged);
 
-  // Se o perfil for 'usuario' (Consultor), filtra para ver os seus próprios reports + os que foram criados no seu ID
+  // Se o perfil for 'usuario' (Consultor), filtra para ver os seus próprios reports
   let filtered = allMerged;
   if (role === 'usuario' && userId) {
-    filtered = allMerged.filter((r) => r.autor_id === userId);
+    filtered = allMerged.filter((r) => r.autor_id === userId || (userId.includes('jessica') && r.autor_nome === 'Jessica') || (userId.includes('johnatha') && r.autor_nome === 'Johnatha Francis'));
   }
 
   // Ordena os mais recentes primeiro
@@ -113,10 +117,23 @@ export async function fetchAllReports(userId?: string, role?: string): Promise<R
  * Cadastra um novo report no LocalStorage, no Servidor e na Cloud KV global.
  */
 export async function saveNewReport(newReport: Report): Promise<void> {
-  const current = getLocalReports();
+  // Primeiro busca a versão atual da Nuvem para garantir que não perde reports de outros usuários
+  let cloudReports: Report[] = [];
+  try {
+    const res = await fetch(CLOUD_SYNC_REPORTS_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) cloudReports = data;
+    }
+  } catch (e) {}
+
+  const localReports = getLocalReports();
   const map = new Map<string, Report>();
+
+  cloudReports.forEach((r) => map.set(r.id, r));
+  localReports.forEach((r) => map.set(r.id, r));
   map.set(newReport.id, newReport);
-  current.forEach((r) => map.set(r.id, r));
+
   const updated = Array.from(map.values());
 
   saveLocalReports(updated);
@@ -130,26 +147,39 @@ export async function saveNewReport(newReport: Report): Promise<void> {
     });
   } catch (e) {}
 
-  // Sincroniza na Cloud KV
-  syncReportsToCloud(updated);
+  // Sincroniza na Cloud
+  await syncReportsToCloud(updated);
 }
 
 /**
  * Atualiza o status de um report (Novo, Em Andamento, Aprovado/Feito, Recusado).
  */
 export async function updateReportStatusInCloud(reportId: string, status: Report['status']): Promise<Report | null> {
-  const current = getLocalReports();
-  let updatedReport: Report | null = null;
-
-  current.forEach((r) => {
-    if (r.id === reportId) {
-      r.status = status;
-      r.updated_at = new Date().toISOString();
-      updatedReport = { ...r };
+  let cloudReports: Report[] = [];
+  try {
+    const res = await fetch(CLOUD_SYNC_REPORTS_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) cloudReports = data;
     }
-  });
+  } catch (e) {}
 
-  saveLocalReports(current);
+  const localReports = getLocalReports();
+  const map = new Map<string, Report>();
+
+  cloudReports.forEach((r) => map.set(r.id, r));
+  localReports.forEach((r) => map.set(r.id, r));
+
+  let updatedReport: Report | null = null;
+  const target = map.get(reportId);
+  if (target) {
+    target.status = status;
+    target.updated_at = new Date().toISOString();
+    updatedReport = { ...target };
+  }
+
+  const updatedList = Array.from(map.values());
+  saveLocalReports(updatedList);
 
   // Tenta enviar para o servidor
   try {
@@ -160,7 +190,7 @@ export async function updateReportStatusInCloud(reportId: string, status: Report
     });
   } catch (e) {}
 
-  syncReportsToCloud(current);
+  await syncReportsToCloud(updatedList);
   return updatedReport;
 }
 
@@ -169,6 +199,7 @@ export async function updateReportStatusInCloud(reportId: string, status: Report
  */
 export async function fetchAllUsers(): Promise<User[]> {
   const localUsers = getStoredUsers();
+  const deletedIds = getDeletedUserIds();
   let serverUsers: User[] = [];
   let cloudUsers: User[] = [];
 
@@ -189,14 +220,30 @@ export async function fetchAllUsers(): Promise<User[]> {
   } catch (e) {}
 
   const map = new Map<string, User>();
-  DEFAULT_USERS.forEach((u) => map.set(u.email.toLowerCase(), u));
-  localUsers.forEach((u) => map.set(u.email.toLowerCase(), u));
-  serverUsers.forEach((u) => map.set(u.email.toLowerCase(), u));
-  cloudUsers.forEach((u) => map.set(u.email.toLowerCase(), u));
+  DEFAULT_USERS.forEach((u) => {
+    if (!deletedIds.includes(u.id) && !deletedIds.includes(u.email.toLowerCase())) {
+      map.set(u.email.toLowerCase(), u);
+    }
+  });
+  localUsers.forEach((u) => {
+    if (!deletedIds.includes(u.id) && !deletedIds.includes(u.email.toLowerCase())) {
+      map.set(u.email.toLowerCase(), u);
+    }
+  });
+  serverUsers.forEach((u) => {
+    if (!deletedIds.includes(u.id) && !deletedIds.includes(u.email.toLowerCase())) {
+      map.set(u.email.toLowerCase(), u);
+    }
+  });
+  cloudUsers.forEach((u) => {
+    if (!deletedIds.includes(u.id) && !deletedIds.includes(u.email.toLowerCase())) {
+      map.set(u.email.toLowerCase(), u);
+    }
+  });
 
   const merged = Array.from(map.values());
   saveStoredUsers(merged);
-  syncUsersToCloud(merged);
+  await syncUsersToCloud(merged);
   return merged;
 }
 
@@ -206,7 +253,6 @@ export async function fetchAllUsers(): Promise<User[]> {
 export async function saveNewUser(newUser: User): Promise<void> {
   const current = getStoredUsers();
   const map = new Map<string, User>();
-  DEFAULT_USERS.forEach((u) => map.set(u.email.toLowerCase(), u));
   current.forEach((u) => map.set(u.email.toLowerCase(), u));
   map.set(newUser.email.toLowerCase(), newUser);
 
@@ -221,7 +267,7 @@ export async function saveNewUser(newUser: User): Promise<void> {
     });
   } catch (e) {}
 
-  syncUsersToCloud(updated);
+  await syncUsersToCloud(updated);
 }
 
 /**
@@ -229,7 +275,13 @@ export async function saveNewUser(newUser: User): Promise<void> {
  */
 export async function deleteUserFromCloud(userId: string): Promise<void> {
   const current = getStoredUsers();
-  const updated = current.filter((u) => u.id !== userId);
+  const targetUser = current.find((u) => u.id === userId);
+
+  markUserAsDeleted(userId, targetUser?.email);
+
+  const updated = current.filter(
+    (u) => u.id !== userId && u.email.toLowerCase() !== targetUser?.email.toLowerCase()
+  );
   saveStoredUsers(updated);
 
   try {
@@ -238,5 +290,5 @@ export async function deleteUserFromCloud(userId: string): Promise<void> {
     });
   } catch (e) {}
 
-  syncUsersToCloud(updated);
+  await syncUsersToCloud(updated);
 }

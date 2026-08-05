@@ -78,6 +78,11 @@ export default function App() {
     }
   }, [user, showToast]);
 
+  const handleManualRefresh = useCallback(async () => {
+    await fetchReports();
+    showToast('Sincronizado! Lista de reports atualizada.');
+  }, [fetchReports, showToast]);
+
   // Initial fetch and polling fallback
   useEffect(() => {
     if (user) {
@@ -255,7 +260,7 @@ export default function App() {
               user={user}
               reports={reports}
               onUpdateStatus={handleUpdateStatus}
-              onRefresh={fetchReports}
+              onRefresh={handleManualRefresh}
               onOpenPromptModal={(r) => setPromptReport(r)}
               onOpenImageModal={(url) => setModalImage(url)}
             />
@@ -265,7 +270,7 @@ export default function App() {
             user={user}
             reports={reports}
             onSubmitReport={handleSubmitReport}
-            onRefresh={fetchReports}
+            onRefresh={handleManualRefresh}
             onOpenImageModal={(url) => setModalImage(url)}
           />
         )}

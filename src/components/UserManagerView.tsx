@@ -57,16 +57,23 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
     setTimeout(() => setFeedbackMsg(null), 3500);
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (showToastFeedback = false) => {
     try {
       setLoading(true);
       const list = await fetchAllUsers();
       setUsers(list);
+      if (showToastFeedback) {
+        showFeedback('Lista de usuários atualizada com sucesso!');
+      }
     } catch (err) {
       console.error('Erro ao buscar usuários:', err);
     } finally {
-      setLoading(false);
+      setTimeout(() => setLoading(false), 400);
     }
+  };
+
+  const handleRefreshUsers = () => {
+    fetchUsers(true);
   };
 
   useEffect(() => {
@@ -223,10 +230,12 @@ export const UserManagerView: React.FC<UserManagerViewProps> = ({ currentUser })
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={fetchUsers}
-            className="px-3.5 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-[#F8F5EC] hover:bg-slate-200/80 rounded-full flex items-center gap-1.5 transition-colors border border-brand-warm cursor-pointer"
+            onClick={handleRefreshUsers}
+            disabled={loading}
+            className="px-3.5 py-2 text-xs font-bold text-slate-700 hover:text-slate-900 bg-[#F8F5EC] hover:bg-slate-200/80 rounded-full flex items-center gap-1.5 transition-colors border border-brand-warm cursor-pointer disabled:opacity-70"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-amber-600 ${loading ? 'animate-spin' : ''}`} /> Atualizar
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-600 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Atualizando...' : 'Atualizar'}
           </button>
           <button
             type="button"

@@ -26,17 +26,7 @@ ${report.descricao}
 
 COMPORTAMENTO ESPERADO
 [PREENCHER — descrever a solução principal esperada]
-[PREENCHER — solução secundária / fallback, se houver]
-
-O QUE PRECISA SER INVESTIGADO / CORRIGIDO
-1. [PREENCHER]
-2. [PREENCHER]
-3. [PREENCHER]
-
-VALIDAÇÃO
-- [PREENCHER — passo de teste 1]
-- [PREENCHER — passo de teste 2]
-- [PREENCHER — confirmar que cálculos/indexações dependentes refletem a correção]`;
+[PREENCHER — solução secundária / fallback, se houver]`;
 
   const [promptText, setPromptText] = useState(defaultTemplate);
   const [copied, setCopied] = useState(false);

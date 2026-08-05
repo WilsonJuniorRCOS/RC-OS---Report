@@ -91,26 +91,44 @@ export const DEFAULT_USERS: User[] = [
   },
 ];
 
+export function getDeletedUserIds(): string[] {
+  try {
+    const raw = localStorage.getItem('rc_os_deleted_user_ids');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markUserAsDeleted(userId: string, email?: string): void {
+  const ids = getDeletedUserIds();
+  if (!ids.includes(userId)) ids.push(userId);
+  if (email && !ids.includes(email.toLowerCase())) ids.push(email.toLowerCase());
+  try {
+    localStorage.setItem('rc_os_deleted_user_ids', JSON.stringify(ids));
+  } catch (e) {}
+}
+
 export function getStoredUsers(): User[] {
+  const deletedIds = getDeletedUserIds();
   try {
     const raw = localStorage.getItem('rc_os_users_list');
     if (raw) {
-      const parsed = JSON.parse(raw);
+      const parsed: User[] = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        // Ensure default users exist in case localStorage is missing any default ones
-        const emailMap = new Map<string, User>();
-        DEFAULT_USERS.forEach((u) => emailMap.set(u.email.toLowerCase(), u));
-        parsed.forEach((u) => emailMap.set(u.email.toLowerCase(), u));
-        const merged = Array.from(emailMap.values());
-        saveStoredUsers(merged);
-        return merged;
+        return parsed.filter(
+          (u) => !deletedIds.includes(u.id) && !deletedIds.includes(u.email.toLowerCase())
+        );
       }
     }
   } catch (e) {
     console.warn('Erro ao ler rc_os_users_list do localStorage', e);
   }
-  saveStoredUsers(DEFAULT_USERS);
-  return DEFAULT_USERS;
+  const initial = DEFAULT_USERS.filter(
+    (u) => !deletedIds.includes(u.id) && !deletedIds.includes(u.email.toLowerCase())
+  );
+  saveStoredUsers(initial);
+  return initial;
 }
 
 export function saveStoredUsers(users: User[]): void {

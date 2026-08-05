@@ -38,6 +38,18 @@ export const AdminView: React.FC<AdminViewProps> = ({
   const [filterTipo, setFilterTipo] = useState<ReportTipo | 'todos'>('todos');
   const [searchTerm, setSearchTerm] = useState('');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshClick = async () => {
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
 
   // Stats calculation
   const totalReports = reports.length;
@@ -132,10 +144,12 @@ export const AdminView: React.FC<AdminViewProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={onRefresh}
-            className="px-3.5 py-1.5 text-xs font-bold text-slate-800 hover:text-slate-900 bg-[#F8F5EC] hover:bg-slate-200/80 rounded-full flex items-center gap-1.5 transition-colors cursor-pointer border border-brand-warm"
+            onClick={handleRefreshClick}
+            disabled={isRefreshing}
+            className="px-3.5 py-1.5 text-xs font-bold text-slate-800 hover:text-slate-900 bg-[#F8F5EC] hover:bg-slate-200/80 rounded-full flex items-center gap-1.5 transition-colors cursor-pointer border border-brand-warm disabled:opacity-70"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-amber-600" /> Atualizar
+            <RefreshCw className={`w-3.5 h-3.5 text-amber-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Atualizando...' : 'Atualizar'}
           </button>
         </div>
       </div>
