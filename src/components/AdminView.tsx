@@ -95,7 +95,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
         return (
           <span className="px-3 py-1 bg-emerald-100 text-emerald-600 text-[10px] font-bold rounded-full uppercase tracking-wider inline-flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-            Aprovado
+            Feito
           </span>
         );
       case 'recusado':
@@ -182,7 +182,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                 : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
             }`}
           >
-            Aprovados ({countAprovados})
+            Feitos ({countAprovados})
           </button>
           <button
             onClick={() => setFilterStatus('recusado')}
@@ -308,7 +308,7 @@ export const AdminView: React.FC<AdminViewProps> = ({
                         >
                           <option value="novo">Status: Novo</option>
                           <option value="em_andamento">Em Andamento</option>
-                          <option value="aprovado">Aprovar</option>
+                          <option value="aprovado">Feito</option>
                           <option value="recusado">Recusar</option>
                         </select>
 
