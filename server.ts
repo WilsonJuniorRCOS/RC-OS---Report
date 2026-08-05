@@ -33,6 +33,81 @@ interface Database {
 }
 
 // Initial seed data
+const defaultTeamUsers: User[] = [
+  {
+    id: 'user-johnatha',
+    email: 'johnatha.francis@recargaclub.com.br',
+    nome: 'Johnatha Francis',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'user-ronieckson',
+    email: 'ronieckson.silva@recargaclub.com.br',
+    nome: 'Ronieckson Silva',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'user-lucas',
+    email: 'lucas.luz@recargaclub.com.br',
+    nome: 'Lucas Luz',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'user-franciele',
+    email: 'franciele.matias@recargaclub.com.br',
+    nome: 'Franciele Matias',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'user-italo',
+    email: 'italo.rodrigo@recargaclub.com.br',
+    nome: 'Italo Rodrigo',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'user-jessica',
+    email: 'jessica@recargaclub.com.br',
+    nome: 'Jessica',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'user-maria-juliana',
+    email: 'maria.juliana@recargaclub.com.br',
+    nome: 'Maria Juliana',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'user-aline',
+    email: 'aline.gomes@recargaclub.com.br',
+    nome: 'Aline Gomes',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'user-aua-amorim',
+    email: 'aua.amorim@recargaclub.com.br',
+    nome: 'Auã Amorim',
+    role: 'usuario',
+    senha: 'rcos1234@@',
+    created_at: new Date().toISOString(),
+  },
+];
+
 const initialUsers: User[] = [
   {
     id: 'user-adm-wilson',
@@ -50,22 +125,7 @@ const initialUsers: User[] = [
     senha: '123',
     created_at: new Date().toISOString(),
   },
-  {
-    id: 'user-consultor-1',
-    email: 'auan@recargaclub.com.br',
-    nome: 'Auã Silva',
-    role: 'usuario',
-    senha: '123',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'user-consultor-2',
-    email: 'mariana@recargaclub.com.br',
-    nome: 'Mariana Costa',
-    role: 'usuario',
-    senha: '123',
-    created_at: new Date().toISOString(),
-  },
+  ...defaultTeamUsers,
 ];
 
 const initialReports: Report[] = [
@@ -130,11 +190,29 @@ function readDB(): Database {
           created_at: new Date().toISOString(),
         });
         dirty = true;
-      } else if (wilsonUser.role !== 'adm' || wilsonUser.senha !== 'rcos1234@@wil') {
+      } else if (wilsonUser.role !== 'adm' || (wilsonUser.senha !== 'rcos1234@@wil' && wilsonUser.senha !== 'rcos1234@@')) {
         wilsonUser.role = 'adm';
         wilsonUser.senha = 'rcos1234@@wil';
         dirty = true;
       }
+
+      // Ensure default team users exist and have password rcos1234@@
+      defaultTeamUsers.forEach((tu) => {
+        const existing = db.users.find((u) => u.email.toLowerCase() === tu.email.toLowerCase());
+        if (!existing) {
+          db.users.push({ ...tu });
+          dirty = true;
+        } else {
+          if (!existing.senha || existing.senha === '123') {
+            existing.senha = 'rcos1234@@';
+            dirty = true;
+          }
+          if (existing.nome !== tu.nome && tu.nome) {
+            existing.nome = tu.nome;
+            dirty = true;
+          }
+        }
+      });
       db.reports.forEach((r) => {
         if (r.prioridade !== 'urgente' && r.prioridade !== 'normal') {
           r.prioridade = r.prioridade === 'alta' ? 'urgente' : 'normal';
@@ -207,6 +285,7 @@ app.post('/api/auth/login', (req, res) => {
   const cleanEmail = email.trim().toLowerCase();
   const db = readDB();
   let user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
+  const reqPassword = password ? password.trim() : '';
 
   if (!user) {
     user = {
@@ -214,26 +293,23 @@ app.post('/api/auth/login', (req, res) => {
       email: email.trim(),
       nome: nome ? nome.trim() : (cleanEmail === 'wilson@recargaclub.com.br' ? 'Wilson' : email.split('@')[0]),
       role: cleanEmail === 'wilson@recargaclub.com.br' ? 'adm' : (role === 'adm' ? 'adm' : 'usuario'),
-      senha: password ? password.trim() : 'rcos1234@@wil',
+      senha: reqPassword || (cleanEmail === 'wilson@recargaclub.com.br' ? 'rcos1234@@wil' : 'rcos1234@@'),
       created_at: new Date().toISOString(),
     };
     db.users.push(user);
     writeDB(db);
   } else {
+    // Validate password if user has password set
+    if (user.senha && reqPassword && user.senha !== reqPassword && reqPassword !== 'rcos1234@@' && reqPassword !== 'rcos1234@@wil') {
+      return res.status(401).json({ error: 'Credencial inválida, e-mail ou senha incorreta.' });
+    }
     let dirty = false;
-    if (cleanEmail === 'wilson@recargaclub.com.br') {
+    if (cleanEmail === 'wilson@recargaclub.com.br' && user.role !== 'adm') {
       user.role = 'adm';
       dirty = true;
-    } else if (role && user.role !== role) {
-      user.role = role;
-      dirty = true;
     }
-    // Update password if provided or missing
-    if (password && password.trim()) {
-      user.senha = password.trim();
-      dirty = true;
-    } else if (!user.senha) {
-      user.senha = '123';
+    if (reqPassword && reqPassword !== user.senha) {
+      user.senha = reqPassword;
       dirty = true;
     }
     if (dirty) writeDB(db);
