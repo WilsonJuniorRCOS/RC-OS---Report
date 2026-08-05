@@ -1,13 +1,13 @@
 import React from 'react';
 import { User } from '../types';
-import { ShieldCheck, User as UserIcon, LogOut, ArrowRightLeft, FileSpreadsheet, Users } from 'lucide-react';
+import { ShieldCheck, User as UserIcon, LogOut, FileSpreadsheet, Users } from 'lucide-react';
 
 interface NavbarProps {
   user: User | null;
   activeAdmTab?: 'reports' | 'users';
   onSelectAdmTab?: (tab: 'reports' | 'users') => void;
   onLogout: () => void;
-  onSwitchUser: (email: string, role: 'usuario' | 'adm') => void;
+  onSwitchUser?: (email: string, role: 'usuario' | 'adm') => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -15,7 +15,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeAdmTab = 'reports',
   onSelectAdmTab,
   onLogout,
-  onSwitchUser,
 }) => {
   return (
     <header className="h-16 bg-white border-b border-brand-warm px-4 sm:px-8 flex items-center justify-between shrink-0 sticky top-0 z-40 shadow-xs">
@@ -73,35 +72,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">
                 Modo {user.role === 'adm' ? 'Administrador' : 'Consultor'}
               </span>
-            </div>
-
-            {/* Quick Demo Role Switcher */}
-            <div className="hidden lg:flex items-center gap-1.5 text-xs bg-[#F8F5EC] p-1 rounded-full border border-brand-warm">
-              <span className="text-slate-500 px-2 flex items-center gap-1 font-medium">
-                <ArrowRightLeft className="w-3 h-3 text-slate-400" /> Alternar:
-              </span>
-              <button
-                id="btn-switch-auan"
-                onClick={() => onSwitchUser('auan@recargaclub.com.br', 'usuario')}
-                className={`px-3 py-1 rounded-full text-xs transition-all cursor-pointer ${
-                  user.email === 'auan@recargaclub.com.br'
-                    ? 'bg-brand-yellow text-brand-dark font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                Auã (Consultor)
-              </button>
-              <button
-                id="btn-switch-adm"
-                onClick={() => onSwitchUser('adm@recargaclub.com.br', 'adm')}
-                className={`px-3 py-1 rounded-full text-xs transition-all cursor-pointer ${
-                  user.role === 'adm'
-                    ? 'bg-slate-900 text-white font-bold shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                Carlos (ADM)
-              </button>
             </div>
 
             {/* User Info Avatar & Details */}

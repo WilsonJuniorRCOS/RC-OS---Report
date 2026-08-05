@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UserRole } from '../types';
-import { ShieldCheck, User, LogIn, AlertCircle, Sparkles } from 'lucide-react';
+import { ShieldCheck, User, LogIn, AlertCircle } from 'lucide-react';
 
 interface LoginViewProps {
   onLogin: (email: string, role: UserRole, nome?: string, password?: string) => Promise<boolean>;
@@ -29,20 +29,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
       }
     } catch (err: any) {
       setError(err?.message || 'Erro ao realizar login.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleQuickLogin = async (targetEmail: string, targetRole: UserRole, nome: string) => {
-    setEmail(targetEmail);
-    setRoleSelection(targetRole);
-    setError(null);
-    setLoading(true);
-    try {
-      await onLogin(targetEmail, targetRole, nome);
-    } catch (err: any) {
-      setError(err?.message || 'Erro no login rápido.');
     } finally {
       setLoading(false);
     }
@@ -148,48 +134,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin }) => {
               )}
             </button>
           </form>
-
-          {/* Quick Demo Access Section */}
-          <div className="mt-6 pt-5 border-t border-slate-100">
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-500" /> Acesso Rápido de Teste (1-Clique):
-            </p>
-            <div className="space-y-2">
-              <button
-                type="button"
-                id="quick-login-auan"
-                onClick={() => handleQuickLogin('auan@recargaclub.com.br', 'usuario', 'Auã Silva')}
-                className="w-full p-2.5 bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 rounded-lg flex items-center justify-between text-left transition-all group"
-              >
-                <div>
-                  <span className="block text-xs font-bold text-slate-800 group-hover:text-indigo-700">
-                    Auã Silva (Consultor)
-                  </span>
-                  <span className="block text-[11px] text-slate-500">auan@recargaclub.com.br</span>
-                </div>
-                <span className="text-xs font-semibold text-indigo-600 bg-white px-2 py-0.5 rounded border border-slate-200 group-hover:border-indigo-300">
-                  Entrar como Consultor
-                </span>
-              </button>
-
-              <button
-                type="button"
-                id="quick-login-adm"
-                onClick={() => handleQuickLogin('adm@recargaclub.com.br', 'adm', 'Carlos ADM')}
-                className="w-full p-2.5 bg-slate-50 hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 rounded-lg flex items-center justify-between text-left transition-all group"
-              >
-                <div>
-                  <span className="block text-xs font-bold text-slate-800 group-hover:text-emerald-700">
-                    Carlos ADM (Administrador)
-                  </span>
-                  <span className="block text-[11px] text-slate-500">adm@recargaclub.com.br</span>
-                </div>
-                <span className="text-xs font-semibold text-emerald-600 bg-white px-2 py-0.5 rounded border border-slate-200 group-hover:border-emerald-300">
-                  Entrar como ADM
-                </span>
-              </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>

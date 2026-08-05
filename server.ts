@@ -27,6 +27,14 @@ interface Database {
 // Initial seed data
 const initialUsers: User[] = [
   {
+    id: 'user-adm-wilson',
+    email: 'wilson@recargaclub.com.br',
+    nome: 'Wilson',
+    role: 'adm',
+    senha: 'rcos1234@@wil',
+    created_at: new Date().toISOString(),
+  },
+  {
     id: 'user-adm-1',
     email: 'adm@recargaclub.com.br',
     nome: 'Carlos ADM',
@@ -98,6 +106,24 @@ function readDB(): Database {
           dirty = true;
         }
       });
+
+      // Ensure Wilson account exists and is ADM
+      const wilsonUser = db.users.find((u) => u.email.toLowerCase() === 'wilson@recargaclub.com.br');
+      if (!wilsonUser) {
+        db.users.push({
+          id: 'user-adm-wilson',
+          email: 'wilson@recargaclub.com.br',
+          nome: 'Wilson',
+          role: 'adm',
+          senha: 'rcos1234@@wil',
+          created_at: new Date().toISOString(),
+        });
+        dirty = true;
+      } else if (wilsonUser.role !== 'adm' || wilsonUser.senha !== 'rcos1234@@wil') {
+        wilsonUser.role = 'adm';
+        wilsonUser.senha = 'rcos1234@@wil';
+        dirty = true;
+      }
       db.reports.forEach((r) => {
         if (r.prioridade !== 'urgente' && r.prioridade !== 'normal') {
           r.prioridade = r.prioridade === 'alta' ? 'urgente' : 'normal';
